@@ -1,0 +1,71 @@
+/**
+ * ALU (Arithmetic Logic Unit):
+ * Computes out = one of the following functions:
+ *                0, 1, -1,
+ *                x, y, !x, !y, -x, -y,
+ *                x + 1, y + 1, x - 1, y - 1,
+ *                x + y, x - y, y - x,
+ *                x & y, x | y
+ * on the 16-bit inputs x, y,
+ * according to the input bits zx, nx, zy, ny, f, no.
+ * In addition, computes the two output bits:
+ * if (out == 0) zr = 1, else zr = 0
+ * if (out < 0)  ng = 1, else ng = 0
+ */
+// Implementation: Manipulates the x and y inputs
+// and operates on the resulting values, as follows:
+// if (zx == 1) sets x = 0        // 16-bit constant
+// if (nx == 1) sets x = !x       // bitwise not
+// if (zy == 1) sets y = 0        // 16-bit constant
+// if (ny == 1) sets y = !y       // bitwise not
+// if (f == 1)  sets out = x + y  // integer 2's complement addition
+// if (f == 0)  sets out = x & y  // bitwise and
+// if (no == 1) sets out = !out   // bitwise not
+
+CHIP ALU {
+    IN  
+        x[16], y[16],  // 16-bit inputs        
+        zx, // zero the x input?
+        nx, // negate the x input?
+        zy, // zero the y input?
+        ny, // negate the y input?
+        f,  // compute (out = x + y) or (out = x & y)?
+        no; // negate the out output?
+    OUT 
+        out[16], // 16-bit output
+        zr,      // if (out == 0) equals 1, else 0
+        ng;      // if (out < 0)  equals 1, else 0
+
+    PARTS:
+    //pre-setting the x input
+    Mux16(a=x , b=false , sel=zx , out=xzx );
+    Not16(in=xzx , out=notxzx );
+    Mux16(a=xzx , b=notxzx , sel=nx , out=xnx );
+
+    //pre-setting the y input
+    Mux16(a=y , b=false , sel=zy , out=yzy );
+    Not16(in=yzy , out=notyzy );
+    Mux16(a=yzy , b=notyzy , sel=ny , out=yny );
+
+    //computing the add and and gates
+    And16(a=xnx , b=yny , out=xandy );
+    Add16(a =xnx , b =yny , out =xaddy);
+
+    //selecting using control bit f
+    Mux16(a=xandy , b=xaddy , sel=f , out=fout );
+    Not16(in=fout , out=notfout );
+
+    //post-setting
+    Mux16(a=fout , b=notfout , sel=no , out=out, out[15]=selng, out[0..7]=temp1, out[0..7]=temp2);
+    
+    //setting the bit of ng
+    Mux(a=false , b=true , sel=selng , out=ng );
+    
+    //setting the bit of zr
+    Or8Way(in=temp1 , out=out1 );
+    Or8Way(in=temp2 , out=out2 );
+    Or(a=out1 , b=out2 , out=out3 );
+    Not(in=out3 , out=zr );
+    
+
+}
